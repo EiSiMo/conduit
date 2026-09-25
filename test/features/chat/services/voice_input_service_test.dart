@@ -253,7 +253,7 @@ void main() {
     final recorder = _FakeServerVadRecorder();
     final service = _SupportedVoiceInputService(
       nativeStt: nativeStt,
-      api: _MockApiService(),
+      transcriber: _MockApiService(),
       serverVadRecorderFactory: () => recorder,
       supportsNativeResponseWaitCapture: true,
     );
@@ -280,7 +280,7 @@ void main() {
       final recorder = _FakeServerVadRecorder();
       final service = _SupportedVoiceInputService(
         nativeStt: _FakeNativeSttService(),
-        api: _MockApiService(),
+        transcriber: _MockApiService(),
         serverVadRecorderFactory: () => recorder,
       );
       service.updatePreference(SttPreference.serverOnly);
@@ -780,7 +780,7 @@ class _FakeServerVadRecorder implements AudioCapturePort {
 class _SupportedVoiceInputService extends VoiceInputService {
   _SupportedVoiceInputService({
     required super.nativeStt,
-    super.api,
+    super.transcriber,
     super.serverVadRecorderFactory,
     this.deviceLocaleTag = 'en-US',
     this.usesAutomaticNativeLanguage = true,

@@ -11,10 +11,14 @@ import 'package:conduit_core/models/animation_settings.dart';
 part 'settings_service.g.dart';
 
 /// Speech-to-text preference selection.
-enum SttPreference { deviceOnly, serverOnly }
+///
+/// [direct] transcribes through a direct connection (currently OpenRouter)
+/// instead of the Open WebUI server.
+enum SttPreference { deviceOnly, serverOnly, direct }
 
-/// TTS engine selection
-enum TtsEngine { device, server }
+/// TTS engine selection. [direct] synthesizes through a direct connection
+/// (currently OpenRouter) instead of the Open WebUI server.
+enum TtsEngine { device, server, direct }
 
 /// Action to take when the Android digital assistant is triggered.
 enum AndroidAssistantTrigger { overlay, newChat, voiceCall }
@@ -333,7 +337,30 @@ class SettingsService {
           ? settings.ttsServerVoiceName
           : null,
     );
+    await _putOrRemove(
+      PreferenceKeys.sttDirectProfileId,
+      _nonEmpty(settings.sttDirectProfileId),
+    );
+    await _putOrRemove(
+      PreferenceKeys.sttDirectModelId,
+      _nonEmpty(settings.sttDirectModelId),
+    );
+    await _putOrRemove(
+      PreferenceKeys.ttsDirectProfileId,
+      _nonEmpty(settings.ttsDirectProfileId),
+    );
+    await _putOrRemove(
+      PreferenceKeys.ttsDirectModelId,
+      _nonEmpty(settings.ttsDirectModelId),
+    );
+    await _putOrRemove(
+      PreferenceKeys.ttsDirectVoice,
+      _nonEmpty(settings.ttsDirectVoice),
+    );
   }
+
+  static String? _nonEmpty(String? value) =>
+      (value?.isNotEmpty ?? false) ? value : null;
 
   static Future<void> _putOrRemove(String key, Object? value) {
     return value == null
@@ -345,6 +372,8 @@ class SettingsService {
     switch ((raw ?? '').toLowerCase()) {
       case 'server':
         return TtsEngine.server;
+      case 'direct':
+        return TtsEngine.direct;
       case 'device':
         return TtsEngine.device;
       default:
@@ -362,6 +391,8 @@ class SettingsService {
       case 'server_only':
       case 'server':
         return SttPreference.serverOnly;
+      case 'direct':
+        return SttPreference.direct;
       default:
         return SttPreference.deviceOnly;
     }
@@ -672,6 +703,21 @@ class SettingsService {
       ttsServerVoiceName: PreferencesStore.get<String>(
         PreferenceKeys.ttsServerVoiceName,
       ),
+      ttsDirectProfileId: PreferencesStore.get<String>(
+        PreferenceKeys.ttsDirectProfileId,
+      ),
+      ttsDirectModelId: PreferencesStore.get<String>(
+        PreferenceKeys.ttsDirectModelId,
+      ),
+      ttsDirectVoice: PreferencesStore.get<String>(
+        PreferenceKeys.ttsDirectVoice,
+      ),
+      sttDirectProfileId: PreferencesStore.get<String>(
+        PreferenceKeys.sttDirectProfileId,
+      ),
+      sttDirectModelId: PreferencesStore.get<String>(
+        PreferenceKeys.sttDirectModelId,
+      ),
       sttPreference: _parseSttPreference(
         PreferencesStore.get<String>(PreferenceKeys.voiceSttPreference),
       ),
@@ -735,6 +781,8 @@ class AppSettings {
   final bool sendOnEnter;
   final SttPreference sttPreference;
   final String? sttLanguageCode;
+  final String? sttDirectProfileId;
+  final String? sttDirectModelId;
   final String? ttsVoice;
   final String? ttsVoiceName;
   final double ttsSpeechRate;
@@ -743,6 +791,9 @@ class AppSettings {
   final TtsEngine ttsEngine;
   final String? ttsServerVoiceId;
   final String? ttsServerVoiceName;
+  final String? ttsDirectProfileId;
+  final String? ttsDirectModelId;
+  final String? ttsDirectVoice;
   final AndroidAssistantTrigger androidAssistantTrigger;
   final int voiceSilenceDuration;
   final bool temporaryChatByDefault;
@@ -775,6 +826,8 @@ class AppSettings {
     this.sendOnEnter = false,
     this.sttPreference = SttPreference.deviceOnly,
     this.sttLanguageCode,
+    this.sttDirectProfileId,
+    this.sttDirectModelId,
     this.ttsVoice,
     this.ttsVoiceName,
     this.ttsSpeechRate = 0.5,
@@ -783,6 +836,9 @@ class AppSettings {
     this.ttsEngine = TtsEngine.device,
     this.ttsServerVoiceId,
     this.ttsServerVoiceName,
+    this.ttsDirectProfileId,
+    this.ttsDirectModelId,
+    this.ttsDirectVoice,
     this.androidAssistantTrigger = AndroidAssistantTrigger.overlay,
     this.voiceSilenceDuration = SettingsService.defaultVoiceSilenceDurationMs,
     this.temporaryChatByDefault = false,
@@ -816,6 +872,8 @@ class AppSettings {
     bool? sendOnEnter,
     SttPreference? sttPreference,
     Object? sttLanguageCode = const _DefaultValue(),
+    Object? sttDirectProfileId = const _DefaultValue(),
+    Object? sttDirectModelId = const _DefaultValue(),
     Object? ttsVoice = const _DefaultValue(),
     Object? ttsVoiceName = const _DefaultValue(),
     double? ttsSpeechRate,
@@ -824,6 +882,9 @@ class AppSettings {
     TtsEngine? ttsEngine,
     Object? ttsServerVoiceId = const _DefaultValue(),
     Object? ttsServerVoiceName = const _DefaultValue(),
+    Object? ttsDirectProfileId = const _DefaultValue(),
+    Object? ttsDirectModelId = const _DefaultValue(),
+    Object? ttsDirectVoice = const _DefaultValue(),
     int? voiceSilenceDuration,
     AndroidAssistantTrigger? androidAssistantTrigger,
     bool? temporaryChatByDefault,
@@ -867,6 +928,12 @@ class AppSettings {
       sttLanguageCode: sttLanguageCode is _DefaultValue
           ? this.sttLanguageCode
           : sttLanguageCode as String?,
+      sttDirectProfileId: sttDirectProfileId is _DefaultValue
+          ? this.sttDirectProfileId
+          : sttDirectProfileId as String?,
+      sttDirectModelId: sttDirectModelId is _DefaultValue
+          ? this.sttDirectModelId
+          : sttDirectModelId as String?,
       ttsVoice: ttsVoice is _DefaultValue ? this.ttsVoice : ttsVoice as String?,
       ttsVoiceName: ttsVoiceName is _DefaultValue
           ? this.ttsVoiceName
@@ -881,6 +948,15 @@ class AppSettings {
       ttsServerVoiceName: ttsServerVoiceName is _DefaultValue
           ? this.ttsServerVoiceName
           : ttsServerVoiceName as String?,
+      ttsDirectProfileId: ttsDirectProfileId is _DefaultValue
+          ? this.ttsDirectProfileId
+          : ttsDirectProfileId as String?,
+      ttsDirectModelId: ttsDirectModelId is _DefaultValue
+          ? this.ttsDirectModelId
+          : ttsDirectModelId as String?,
+      ttsDirectVoice: ttsDirectVoice is _DefaultValue
+          ? this.ttsDirectVoice
+          : ttsDirectVoice as String?,
       androidAssistantTrigger:
           androidAssistantTrigger ?? this.androidAssistantTrigger,
       voiceSilenceDuration: voiceSilenceDuration ?? this.voiceSilenceDuration,
@@ -931,6 +1007,11 @@ class AppSettings {
         other.ttsEngine == ttsEngine &&
         other.ttsServerVoiceId == ttsServerVoiceId &&
         other.ttsServerVoiceName == ttsServerVoiceName &&
+        other.ttsDirectProfileId == ttsDirectProfileId &&
+        other.ttsDirectModelId == ttsDirectModelId &&
+        other.ttsDirectVoice == ttsDirectVoice &&
+        other.sttDirectProfileId == sttDirectProfileId &&
+        other.sttDirectModelId == sttDirectModelId &&
         other.androidAssistantTrigger == androidAssistantTrigger &&
         other.voiceSilenceDuration == voiceSilenceDuration &&
         other.temporaryChatByDefault == temporaryChatByDefault &&
@@ -974,6 +1055,11 @@ class AppSettings {
       ttsEngine,
       ttsServerVoiceId,
       ttsServerVoiceName,
+      ttsDirectProfileId,
+      ttsDirectModelId,
+      ttsDirectVoice,
+      sttDirectProfileId,
+      sttDirectModelId,
       androidAssistantTrigger,
       voiceSilenceDuration,
       temporaryChatByDefault,
@@ -1276,7 +1362,7 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
   }
 
   Future<void> setTtsEngineSelection(TtsEngine engine) async {
-    state = engine == TtsEngine.server
+    state = engine != TtsEngine.device
         ? state.copyWith(ttsEngine: engine, ttsVoice: null, ttsVoiceName: null)
         : state.copyWith(ttsEngine: engine);
     await SettingsService.saveSettings(state);
@@ -1294,6 +1380,37 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   Future<void> setTtsServerVoiceSelection(String? id, String? name) async {
     state = state.copyWith(ttsServerVoiceId: id, ttsServerVoiceName: name);
+    await SettingsService.saveSettings(state);
+  }
+
+  /// Selects the direct connection, model and voice used when
+  /// [TtsEngine.direct] is active. Voices are model-specific, so the voice is
+  /// always set together with the model.
+  Future<void> setTtsDirectModel(
+    String? profileId,
+    String? modelId, {
+    String? voice,
+  }) async {
+    state = state.copyWith(
+      ttsDirectProfileId: profileId,
+      ttsDirectModelId: modelId,
+      ttsDirectVoice: voice,
+    );
+    await SettingsService.saveSettings(state);
+  }
+
+  Future<void> setTtsDirectVoice(String? voice) async {
+    state = state.copyWith(ttsDirectVoice: voice);
+    await SettingsService.saveSettings(state);
+  }
+
+  /// Selects the direct connection and model used when
+  /// [SttPreference.direct] is active.
+  Future<void> setSttDirectModel(String? profileId, String? modelId) async {
+    state = state.copyWith(
+      sttDirectProfileId: profileId,
+      sttDirectModelId: modelId,
+    );
     await SettingsService.saveSettings(state);
   }
 

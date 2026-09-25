@@ -10,6 +10,7 @@ import 'package:conduit_core/providers/app_providers.dart';
 import 'package:conduit_markdown/conduit_markdown.dart';
 
 import '../services/text_to_speech_service.dart';
+import 'remote_speech_providers.dart';
 
 enum TtsPlaybackStatus { idle, initializing, loading, speaking, paused, error }
 
@@ -412,7 +413,9 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
 }
 
 final textToSpeechServiceProvider = Provider<TextToSpeechService>((ref) {
-  final api = ref.watch(apiServiceProvider);
+  // Rebuild on sign-in changes as before; engine switches only swap the
+  // synthesizer so an initialized service keeps its state.
+  ref.watch(apiServiceProvider);
   BackendConfig? readBackendConfig() {
     return ref
         .read(backendConfigProvider)
@@ -420,13 +423,16 @@ final textToSpeechServiceProvider = Provider<TextToSpeechService>((ref) {
   }
 
   final service = TextToSpeechService(
-    api: api,
+    synthesizer: ref.read(activeSpeechSynthesizerProvider),
     backendConfig: readBackendConfig(),
     loadBackendConfig: () async {
       await ref.read(backendConfigProvider.notifier).refresh();
       return readBackendConfig();
     },
   );
+  ref.listen(activeSpeechSynthesizerProvider, (_, next) {
+    service.setSynthesizer(next);
+  });
   ref.listen(backendConfigProvider, (_, next) {
     service.setBackendConfig(
       next.maybeWhen(data: (value) => value, orElse: () => null),

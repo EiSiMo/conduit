@@ -8,6 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/native_sheet_bridge.dart';
 
+import 'package:conduit_core/features/direct_connections/models/direct_connection_profile.dart';
+import 'package:conduit_core/features/direct_connections/services/direct_audio_client.dart';
+import 'package:conduit_core/providers/app_providers.dart';
 import 'package:conduit_core/services/settings_service.dart';
 
 import '../../../core/utils/tts_voice_utils.dart';
@@ -15,6 +18,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/theme/theme_extensions.dart';
 import '../../../shared/utils/ui_utils.dart';
 import '../../../shared/widgets/adaptive_selection_sheet.dart';
+import '../../chat/providers/remote_speech_providers.dart';
 import '../../chat/providers/text_to_speech_provider.dart';
 import '../../chat/services/voice_input_service.dart';
 import '../widgets/adaptive_segmented_selector.dart';
@@ -60,7 +64,10 @@ class AudioSettingsPage extends ConsumerWidget {
     final localAvailable = localSupport.asData?.value ?? false;
     final localLoading = localSupport.isLoading;
     final serverAvailable = ref.watch(serverVoiceRecognitionAvailableProvider);
+    final directAvailable = ref.watch(directVoiceRecognitionAvailableProvider);
     final notifier = ref.read(appSettingsProvider.notifier);
+    final isDirect = settings.sttPreference == SttPreference.direct;
+    final isRemote = settings.sttPreference != SttPreference.deviceOnly;
 
     final warnings = <String>[
       if (settings.sttPreference == SttPreference.deviceOnly &&
@@ -70,6 +77,11 @@ class AudioSettingsPage extends ConsumerWidget {
       if (settings.sttPreference == SttPreference.serverOnly &&
           !serverAvailable)
         l10n.sttServerUnavailableWarning,
+      if (isDirect && !directAvailable) l10n.directAudioUnavailableWarning,
+      if (isDirect &&
+          directAvailable &&
+          ref.watch(activeSpeechTranscriberProvider) == null)
+        l10n.directAudioSelectModelWarning,
     ];
 
     return Column(
@@ -98,6 +110,13 @@ class AudioSettingsPage extends ConsumerWidget {
                     materialIcon: Icons.cloud,
                     enabled: serverAvailable,
                   ),
+                  (
+                    value: SttPreference.direct,
+                    label: l10n.sttEngineDirect,
+                    cupertinoIcon: CupertinoIcons.link,
+                    materialIcon: Icons.link,
+                    enabled: directAvailable,
+                  ),
                 ],
               ),
               if (localLoading) ...[
@@ -105,12 +124,11 @@ class AudioSettingsPage extends ConsumerWidget {
                 const LinearProgressIndicator(minHeight: 3),
               ],
               const SizedBox(height: Spacing.sm),
-              Text(
-                settings.sttPreference == SttPreference.serverOnly
-                    ? l10n.sttEngineServerDescription
-                    : l10n.sttEngineDeviceDescription,
-                style: theme.bodySmall?.copyWith(color: theme.textSecondary),
-              ),
+              Text(switch (settings.sttPreference) {
+                SttPreference.deviceOnly => l10n.sttEngineDeviceDescription,
+                SttPreference.serverOnly => l10n.sttEngineServerDescription,
+                SttPreference.direct => l10n.sttEngineDirectDescription,
+              }, style: theme.bodySmall?.copyWith(color: theme.textSecondary)),
               for (final warning in warnings) ...[
                 const SizedBox(height: Spacing.xs),
                 Text(
@@ -141,7 +159,17 @@ class AudioSettingsPage extends ConsumerWidget {
                 showDeviceSttLanguagePickerSheet(context, ref, settings),
           ),
         ],
-        if (settings.sttPreference == SttPreference.serverOnly) ...[
+        if (isDirect && directAvailable) ...[
+          const SizedBox(height: Spacing.sm),
+          _buildDirectModelTile(
+            context,
+            ref,
+            kind: DirectAudioModelKind.transcription,
+            profileId: settings.sttDirectProfileId,
+            modelId: settings.sttDirectModelId,
+          ),
+        ],
+        if (isRemote) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(
             leading: SettingsIconBadge(
@@ -238,13 +266,22 @@ class AudioSettingsPage extends ConsumerWidget {
     final ttsService = ref.watch(textToSpeechServiceProvider);
     final deviceAvailable =
         ttsService.deviceEngineAvailable || !ttsService.isInitialized;
-    final serverAvailable = ttsService.serverEngineAvailable;
+    // The service reports the active remote backend, which is the direct
+    // one while direct is selected, so ask for the server itself here.
+    final serverAvailable = ref.watch(apiServiceProvider) != null;
+    final directAvailable = ref.watch(directAudioProfilesProvider).isNotEmpty;
+    final isDirect = settings.ttsEngine == TtsEngine.direct;
 
     final warnings = <String>[
       if (settings.ttsEngine == TtsEngine.device && !deviceAvailable)
         l10n.ttsDeviceUnavailableWarning,
       if (settings.ttsEngine == TtsEngine.server && !serverAvailable)
         l10n.ttsServerUnavailableWarning,
+      if (isDirect && !directAvailable) l10n.directAudioUnavailableWarning,
+      if (isDirect &&
+          directAvailable &&
+          ref.watch(activeSpeechSynthesizerProvider) == null)
+        l10n.directAudioSelectModelWarning,
     ];
 
     return Column(
@@ -276,15 +313,21 @@ class AudioSettingsPage extends ConsumerWidget {
                     materialIcon: Icons.cloud,
                     enabled: serverAvailable,
                   ),
+                  (
+                    value: TtsEngine.direct,
+                    label: l10n.ttsEngineDirect,
+                    cupertinoIcon: CupertinoIcons.link,
+                    materialIcon: Icons.link,
+                    enabled: directAvailable,
+                  ),
                 ],
               ),
               const SizedBox(height: Spacing.sm),
-              Text(
-                settings.ttsEngine == TtsEngine.server
-                    ? l10n.ttsEngineServerDescription
-                    : l10n.ttsEngineDeviceDescription,
-                style: theme.bodySmall?.copyWith(color: theme.textSecondary),
-              ),
+              Text(switch (settings.ttsEngine) {
+                TtsEngine.device => l10n.ttsEngineDeviceDescription,
+                TtsEngine.server => l10n.ttsEngineServerDescription,
+                TtsEngine.direct => l10n.ttsEngineDirectDescription,
+              }, style: theme.bodySmall?.copyWith(color: theme.textSecondary)),
               for (final warning in warnings) ...[
                 const SizedBox(height: Spacing.xs),
                 Text(
@@ -298,19 +341,33 @@ class AudioSettingsPage extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: Spacing.sm),
-        CustomizationTile(
-          leading: SettingsIconBadge(
-            icon: UiUtils.platformIcon(
-              ios: CupertinoIcons.speaker_3,
-              android: Icons.record_voice_over,
-            ),
-            color: theme.buttonPrimary,
+        if (isDirect && directAvailable) ...[
+          const SizedBox(height: Spacing.sm),
+          _buildDirectModelTile(
+            context,
+            ref,
+            kind: DirectAudioModelKind.speech,
+            profileId: settings.ttsDirectProfileId,
+            modelId: settings.ttsDirectModelId,
           ),
-          title: l10n.ttsVoice,
-          subtitle: _voiceSubtitle(l10n, settings),
-          onTap: () => _showVoicePickerSheet(context, ref, settings),
-        ),
+        ],
+        if (!isDirect || settings.ttsDirectModelId != null) ...[
+          const SizedBox(height: Spacing.sm),
+          CustomizationTile(
+            leading: SettingsIconBadge(
+              icon: UiUtils.platformIcon(
+                ios: CupertinoIcons.speaker_3,
+                android: Icons.record_voice_over,
+              ),
+              color: theme.buttonPrimary,
+            ),
+            title: l10n.ttsVoice,
+            subtitle: _voiceSubtitle(l10n, settings),
+            onTap: () => isDirect
+                ? _showDirectVoicePickerSheet(context, ref, settings)
+                : _showVoicePickerSheet(context, ref, settings),
+          ),
+        ],
         if (settings.ttsEngine == TtsEngine.device) ...[
           const SizedBox(height: Spacing.sm),
           InsetGroupedSection(
@@ -371,6 +428,9 @@ class AudioSettingsPage extends ConsumerWidget {
   }
 
   String _voiceSubtitle(AppLocalizations l10n, AppSettings settings) {
+    if (settings.ttsEngine == TtsEngine.direct) {
+      return settings.ttsDirectVoice ?? l10n.ttsSystemDefault;
+    }
     if (settings.ttsEngine == TtsEngine.server) {
       final voice =
           settings.ttsServerVoiceName ??
@@ -505,6 +565,177 @@ class AudioSettingsPage extends ConsumerWidget {
                     option.label,
                   );
                 }
+                if (!sheetContext.mounted) return;
+                Navigator.of(sheetContext).pop();
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDirectModelTile(
+    BuildContext context,
+    WidgetRef ref, {
+    required DirectAudioModelKind kind,
+    required String? profileId,
+    required String? modelId,
+  }) {
+    final theme = context.conduitTheme;
+    final l10n = AppLocalizations.of(context)!;
+    final profiles = ref.watch(directAudioProfilesProvider);
+    final profile = profiles.where((p) => p.id == profileId).firstOrNull;
+    final subtitle = profile == null || modelId == null
+        ? l10n.directAudioModelNotSelected
+        : profiles.length > 1
+        ? '${profile.name} · $modelId'
+        : modelId;
+    return CustomizationTile(
+      leading: SettingsIconBadge(
+        icon: UiUtils.platformIcon(
+          ios: CupertinoIcons.cube_box,
+          android: Icons.memory,
+        ),
+        color: theme.buttonPrimary,
+      ),
+      title: l10n.directAudioModel,
+      subtitle: subtitle,
+      onTap: () => _showDirectModelPickerSheet(context, ref, kind),
+    );
+  }
+
+  Future<void> _showDirectModelPickerSheet(
+    BuildContext context,
+    WidgetRef ref,
+    DirectAudioModelKind kind,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final profiles = ref.read(directAudioProfilesProvider);
+    final entries =
+        <({DirectConnectionProfile profile, DirectAudioModel model})>[];
+    try {
+      for (final profile in profiles) {
+        final models = await ref.read(
+          directAudioModelsProvider((profileId: profile.id, kind: kind)).future,
+        );
+        entries.addAll(models.map((model) => (profile: profile, model: model)));
+      }
+    } catch (_) {
+      if (context.mounted) UiUtils.showMessage(context, l10n.errorMessage);
+      return;
+    }
+    if (!context.mounted) return;
+    if (entries.isEmpty) {
+      UiUtils.showMessage(context, l10n.directAudioNoModels);
+      return;
+    }
+
+    final settings = ref.read(appSettingsProvider);
+    final notifier = ref.read(appSettingsProvider.notifier);
+    final isSpeech = kind == DirectAudioModelKind.speech;
+    final selectedProfileId = isSpeech
+        ? settings.ttsDirectProfileId
+        : settings.sttDirectProfileId;
+    final selectedModelId = isSpeech
+        ? settings.ttsDirectModelId
+        : settings.sttDirectModelId;
+
+    await showAdaptiveSelectionSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return AdaptiveSelectionSheet(
+          title: l10n.directAudioSelectModel,
+          itemCount: entries.length,
+          initialChildSize: 0.68,
+          minChildSize: 0.42,
+          maxChildSize: 0.9,
+          itemBuilder: (context, index) {
+            final entry = entries[index];
+            final model = entry.model;
+            return AdaptiveSelectionTile(
+              title: model.name,
+              subtitle: profiles.length > 1
+                  ? '${entry.profile.name} · ${model.id}'
+                  : model.id,
+              selected:
+                  entry.profile.id == selectedProfileId &&
+                  model.id == selectedModelId,
+              onTap: () async {
+                if (isSpeech) {
+                  // Keep the voice when the new model offers it too;
+                  // otherwise start from the model's first voice because
+                  // most providers require one.
+                  final current = settings.ttsDirectVoice;
+                  final voice = model.voices.contains(current)
+                      ? current
+                      : model.voices.firstOrNull;
+                  await notifier.setTtsDirectModel(
+                    entry.profile.id,
+                    model.id,
+                    voice: voice,
+                  );
+                } else {
+                  await notifier.setSttDirectModel(entry.profile.id, model.id);
+                }
+                if (!sheetContext.mounted) return;
+                Navigator.of(sheetContext).pop();
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showDirectVoicePickerSheet(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final profileId = settings.ttsDirectProfileId;
+    final modelId = settings.ttsDirectModelId;
+    if (profileId == null || modelId == null) return;
+
+    final List<String> voices;
+    try {
+      final models = await ref.read(
+        directAudioModelsProvider((
+          profileId: profileId,
+          kind: DirectAudioModelKind.speech,
+        )).future,
+      );
+      voices =
+          models.where((model) => model.id == modelId).firstOrNull?.voices ??
+          const <String>[];
+    } catch (_) {
+      if (context.mounted) UiUtils.showMessage(context, l10n.errorMessage);
+      return;
+    }
+    if (!context.mounted) return;
+    if (voices.isEmpty) {
+      UiUtils.showMessage(context, l10n.ttsNoVoicesAvailable);
+      return;
+    }
+
+    final notifier = ref.read(appSettingsProvider.notifier);
+    await showAdaptiveSelectionSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return AdaptiveSelectionSheet(
+          title: l10n.ttsSelectVoice,
+          itemCount: voices.length,
+          initialChildSize: 0.68,
+          minChildSize: 0.42,
+          maxChildSize: 0.9,
+          itemBuilder: (context, index) {
+            final voice = voices[index];
+            return AdaptiveSelectionTile(
+              title: voice,
+              selected: voice == settings.ttsDirectVoice,
+              onTap: () async {
+                await notifier.setTtsDirectVoice(voice);
                 if (!sheetContext.mounted) return;
                 Navigator.of(sheetContext).pop();
               },

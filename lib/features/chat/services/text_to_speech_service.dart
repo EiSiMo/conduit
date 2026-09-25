@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:conduit_core/models/backend_config.dart';
 
-import 'package:conduit_core/services/api_service.dart';
+import 'package:conduit_core/services/remote_speech.dart';
 
 import 'package:conduit_core/services/settings_service.dart';
 
@@ -30,13 +30,12 @@ export 'tts_manager.dart'
 /// callbacks for backward compatibility.
 class TextToSpeechService {
   TextToSpeechService({
-    ApiService? api,
+    SpeechSynthesizer? synthesizer,
     BackendConfig? backendConfig,
     Future<BackendConfig?> Function()? loadBackendConfig,
   }) : _backendConfig = backendConfig,
        _loadBackendConfig = loadBackendConfig {
-    // Set the API service on the manager
-    TtsManager.instance.setApiService(api);
+    TtsManager.instance.setSynthesizer(synthesizer);
     TtsManager.instance.applyBackendConfig(backendConfig);
 
     // Listen to TTS events and route to callbacks
@@ -67,7 +66,13 @@ class TextToSpeechService {
   /// Whether device TTS is available.
   bool get deviceEngineAvailable => TtsManager.instance.deviceAvailable;
 
-  /// Whether server TTS is available.
+  /// Swaps the remote TTS backend, e.g. when the engine changes between
+  /// Open WebUI and a direct connection.
+  void setSynthesizer(SpeechSynthesizer? synthesizer) {
+    TtsManager.instance.setSynthesizer(synthesizer);
+  }
+
+  /// Whether remote TTS (Open WebUI or direct) is available.
   bool get serverEngineAvailable => TtsManager.instance.serverAvailable;
 
   /// Whether server TTS is preferred and available.
@@ -235,9 +240,9 @@ class TextToSpeechService {
         speechRate: speechRate ?? current.speechRate,
         pitch: pitch ?? current.pitch,
         volume: volume ?? current.volume,
-        engine: engine != null
-            ? (engine == TtsEngine.server ? TtsEngine.server : TtsEngine.device)
-            : (current.preferServer ? TtsEngine.server : TtsEngine.device),
+        engine:
+            engine ??
+            (current.preferServer ? TtsEngine.server : TtsEngine.device),
       ),
     );
   }
@@ -330,7 +335,8 @@ class TextToSpeechService {
       speechRate: speechRate,
       pitch: pitch,
       volume: volume,
-      preferServer: engine == TtsEngine.server,
+      // Direct TTS uses the same remote playback pipeline as the server.
+      preferServer: engine != TtsEngine.device,
     );
   }
 

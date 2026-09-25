@@ -1510,6 +1510,16 @@
     "description": "Warning shown when on-device text-to-speech is unavailable."
   },
   "ttsServerUnavailableWarning": "Chcete-li použít tuto možnost, připojte se k serveru se zapnutým převodem textu na řeč.",
+  "sttEngineDirect": "Přímo",
+  "sttEngineDirectDescription": "Odesílá nahrávky do přepisového modelu tvého připojení OpenRouter.",
+  "ttsEngineDirect": "Přímo",
+  "ttsEngineDirectDescription": "Vytváří řeč pomocí modelu tvého připojení OpenRouter.",
+  "directAudioModel": "Model",
+  "directAudioModelNotSelected": "Nevybráno",
+  "directAudioSelectModel": "Vybrat model",
+  "directAudioUnavailableWarning": "Pro použití této možnosti přidej připojení OpenRouter.",
+  "directAudioSelectModelWarning": "Pro použití této možnosti vyber model.",
+  "directAudioNoModels": "Toto připojení nenabízí žádné odpovídající modely.",
   "@ttsServerUnavailableWarning": {
     "description": "Warning shown when server text-to-speech is unavailable."
   },

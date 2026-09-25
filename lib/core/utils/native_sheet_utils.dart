@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -9,6 +11,7 @@ import 'package:conduit_core/models/socket_health.dart';
 
 import '../services/native_sheet_bridge.dart';
 
+import 'package:conduit_core/features/direct_connections/services/direct_audio_client.dart';
 import 'package:conduit_core/services/settings_service.dart';
 
 import 'tts_voice_utils.dart';
@@ -97,23 +100,98 @@ class NativeAudioSheetParts {
   final NativeSheetDetailConfig voicePickerDetail;
 }
 
+/// Option id for a direct audio model in the native pickers.
+String encodeNativeDirectAudioModelId(String profileId, String modelId) =>
+    jsonEncode([profileId, modelId]);
+
+/// Reverses [encodeNativeDirectAudioModelId].
+({String profileId, String modelId})? decodeNativeDirectAudioModelId(
+  Object? value,
+) {
+  if (value is! String) return null;
+  try {
+    final decoded = jsonDecode(value);
+    if (decoded is List &&
+        decoded.length == 2 &&
+        decoded[0] is String &&
+        decoded[1] is String) {
+      return (profileId: decoded[0] as String, modelId: decoded[1] as String);
+    }
+  } on FormatException {
+    return null;
+  }
+  return null;
+}
+
+/// A direct audio model with the connection that serves it.
+typedef NativeDirectAudioModel = ({
+  String profileId,
+  String profileName,
+  DirectAudioModel model,
+});
+
 NativeAudioSheetParts buildNativeAudioSheetParts(
   AppLocalizations l10n,
   AppSettings appSettings, {
   List<Map<String, dynamic>> ttsVoices = const <Map<String, dynamic>>[],
+  bool directAudioAvailable = false,
+  List<NativeDirectAudioModel> sttDirectModels =
+      const <NativeDirectAudioModel>[],
+  List<NativeDirectAudioModel> ttsDirectModels =
+      const <NativeDirectAudioModel>[],
 }) {
+  final sttDirect = appSettings.sttPreference == SttPreference.direct;
+  final ttsDirect = appSettings.ttsEngine == TtsEngine.direct;
   final sttSegment = NativeSheetItemConfig(
     id: 'stt-engine',
     title: l10n.sttSettings,
-    subtitle: l10n.sttEngineDeviceDescription,
+    subtitle: switch (appSettings.sttPreference) {
+      SttPreference.deviceOnly => l10n.sttEngineDeviceDescription,
+      SttPreference.serverOnly => l10n.sttEngineServerDescription,
+      SttPreference.direct => l10n.sttEngineDirectDescription,
+    },
     sfSymbol: 'mic',
     kind: NativeSheetItemKind.segment,
     value: appSettings.sttPreference.name,
     options: [
       NativeSheetOptionConfig(id: 'deviceOnly', label: l10n.sttEngineDevice),
       NativeSheetOptionConfig(id: 'serverOnly', label: l10n.sttEngineServer),
+      if (directAudioAvailable || sttDirect)
+        NativeSheetOptionConfig(
+          id: SttPreference.direct.name,
+          label: l10n.sttEngineDirect,
+        ),
     ],
   );
+
+  NativeSheetItemConfig directModelPicker({
+    required String id,
+    required String? profileId,
+    required String? modelId,
+    required List<NativeDirectAudioModel> models,
+  }) {
+    final showProfile = models.map((m) => m.profileId).toSet().length > 1;
+    return NativeSheetItemConfig(
+      id: id,
+      title: l10n.directAudioModel,
+      subtitle: modelId ?? l10n.directAudioModelNotSelected,
+      sfSymbol: 'cube',
+      kind: NativeSheetItemKind.searchablePicker,
+      value: profileId == null || modelId == null
+          ? ''
+          : encodeNativeDirectAudioModelId(profileId, modelId),
+      options: [
+        for (final entry in models)
+          NativeSheetOptionConfig(
+            id: encodeNativeDirectAudioModelId(entry.profileId, entry.model.id),
+            label: entry.model.name,
+            subtitle: showProfile
+                ? '${entry.profileName} · ${entry.model.id}'
+                : entry.model.id,
+          ),
+      ],
+    );
+  }
 
   final silenceDivisions =
       ((SettingsService.maxVoiceSilenceDurationMs -
@@ -147,15 +225,22 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
   final ttsSegment = NativeSheetItemConfig(
     id: 'tts-engine',
     title: l10n.ttsSettings,
-    subtitle: appSettings.ttsEngine == TtsEngine.server
-        ? l10n.ttsEngineServerDescription
-        : l10n.ttsEngineDeviceDescription,
+    subtitle: switch (appSettings.ttsEngine) {
+      TtsEngine.device => l10n.ttsEngineDeviceDescription,
+      TtsEngine.server => l10n.ttsEngineServerDescription,
+      TtsEngine.direct => l10n.ttsEngineDirectDescription,
+    },
     sfSymbol: 'speaker.wave.2',
     kind: NativeSheetItemKind.segment,
     value: appSettings.ttsEngine.name,
     options: [
       NativeSheetOptionConfig(id: 'device', label: l10n.ttsEngineDevice),
       NativeSheetOptionConfig(id: 'server', label: l10n.ttsEngineServer),
+      if (directAudioAvailable || ttsDirect)
+        NativeSheetOptionConfig(
+          id: TtsEngine.direct.name,
+          label: l10n.ttsEngineDirect,
+        ),
     ],
   );
 
@@ -174,10 +259,12 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
     kind: NativeSheetItemKind.searchablePicker,
     value: selectedVoiceId,
     options: [
-      NativeSheetOptionConfig(
-        id: ttsSystemDefaultVoiceId,
-        label: l10n.ttsSystemDefault,
-      ),
+      // Direct providers mostly require an explicit voice.
+      if (!ttsDirect)
+        NativeSheetOptionConfig(
+          id: ttsSystemDefaultVoiceId,
+          label: l10n.ttsSystemDefault,
+        ),
       for (final option in voiceOptions)
         NativeSheetOptionConfig(
           id: option.id,
@@ -209,7 +296,14 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
 
   final sttItems = <NativeSheetItemConfig>[
     sttSegment,
-    if (appSettings.sttPreference == SttPreference.serverOnly) ...[
+    if (sttDirect)
+      directModelPicker(
+        id: 'stt-direct-model',
+        profileId: appSettings.sttDirectProfileId,
+        modelId: appSettings.sttDirectModelId,
+        models: sttDirectModels,
+      ),
+    if (appSettings.sttPreference != SttPreference.deviceOnly) ...[
       sttLanguageField,
       silenceSlider,
     ],
@@ -225,7 +319,14 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
 
   final ttsItems = <NativeSheetItemConfig>[
     ttsSegment,
-    voicePickerNav,
+    if (ttsDirect)
+      directModelPicker(
+        id: 'tts-direct-model',
+        profileId: appSettings.ttsDirectProfileId,
+        modelId: appSettings.ttsDirectModelId,
+        models: ttsDirectModels,
+      ),
+    if (!ttsDirect || appSettings.ttsDirectModelId != null) voicePickerNav,
     if (appSettings.ttsEngine == TtsEngine.device) speechRateSlider,
     previewNav,
   ];
@@ -247,6 +348,9 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
 }
 
 String _nativeVoiceSubtitle(AppLocalizations l10n, AppSettings settings) {
+  if (settings.ttsEngine == TtsEngine.direct) {
+    return settings.ttsDirectVoice ?? l10n.ttsSystemDefault;
+  }
   if (settings.ttsEngine == TtsEngine.server) {
     final voice =
         settings.ttsServerVoiceName ??

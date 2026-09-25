@@ -57,6 +57,8 @@ import 'package:conduit_core/utils/json_normalization.dart';
 import 'package:conduit_core/utils/message_tree_utils.dart' as message_tree;
 import 'package:conduit_core/services/conversation_parsing.dart';
 
+import 'package:conduit_core/services/remote_speech.dart';
+
 import 'package:conduit_core/services/settings_service.dart';
 
 import 'package:conduit_core/services/worker_manager.dart';
@@ -325,7 +327,8 @@ class ApiService extends _ApiServiceBase
         _NotesApi,
         _UserSettingsApi,
         _MediaRetrievalApi,
-        _EvaluationsApi {
+        _EvaluationsApi
+    implements SpeechTranscriber, SpeechSynthesizer {
   ApiService({
     required super.serverConfig,
     required super.workerManager,

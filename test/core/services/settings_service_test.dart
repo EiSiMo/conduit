@@ -431,6 +431,48 @@ void main() {
     );
   });
 
+  group('SettingsService direct audio persistence', () {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      PreferencesStore.debugOverride(await FlutterKeyValueStore.load());
+    });
+
+    tearDown(PreferencesStore.debugReset);
+
+    test('round-trips direct engines and selections', () async {
+      await SettingsService.saveSettings(
+        const AppSettings(
+          sttPreference: SttPreference.direct,
+          sttDirectProfileId: 'or',
+          sttDirectModelId: 'openai/whisper-1',
+          ttsEngine: TtsEngine.direct,
+          ttsDirectProfileId: 'or',
+          ttsDirectModelId: 'openai/gpt-4o-mini-tts',
+          ttsDirectVoice: 'alloy',
+        ),
+      );
+
+      final loaded = await SettingsService.loadSettings();
+      check(loaded.sttPreference).equals(SttPreference.direct);
+      check(loaded.sttDirectProfileId).equals('or');
+      check(loaded.sttDirectModelId).equals('openai/whisper-1');
+      check(loaded.ttsEngine).equals(TtsEngine.direct);
+      check(loaded.ttsDirectProfileId).equals('or');
+      check(loaded.ttsDirectModelId).equals('openai/gpt-4o-mini-tts');
+      check(loaded.ttsDirectVoice).equals('alloy');
+    });
+
+    test('clears direct selections when unset', () async {
+      await SettingsService.saveSettings(
+        const AppSettings(ttsDirectModelId: 'openai/gpt-4o-mini-tts'),
+      );
+      await SettingsService.saveSettings(const AppSettings());
+
+      check(PreferencesStore.containsKey(PreferenceKeys.ttsDirectModelId))
+          .isFalse();
+    });
+  });
+
   group('SettingsService OpenRouter image model persistence', () {
     setUp(() async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -518,15 +560,17 @@ void main() {
 
   group('Enum values', () {
     test('SttPreference has expected values', () {
-      check(SttPreference.values).length.equals(2);
+      check(SttPreference.values).length.equals(3);
       check(SttPreference.values).contains(SttPreference.deviceOnly);
       check(SttPreference.values).contains(SttPreference.serverOnly);
+      check(SttPreference.values).contains(SttPreference.direct);
     });
 
     test('TtsEngine has expected values', () {
-      check(TtsEngine.values).length.equals(2);
+      check(TtsEngine.values).length.equals(3);
       check(TtsEngine.values).contains(TtsEngine.device);
       check(TtsEngine.values).contains(TtsEngine.server);
+      check(TtsEngine.values).contains(TtsEngine.direct);
     });
 
     test('AndroidAssistantTrigger has expected values', () {
