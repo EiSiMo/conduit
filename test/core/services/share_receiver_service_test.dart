@@ -17,6 +17,10 @@ import 'package:conduit/platform/share_receiver_service.dart';
 import 'package:conduit_core/services/share_staging_cleanup.dart';
 import 'package:conduit/features/chat/services/file_attachment_service.dart';
 import 'package:conduit_core/features/hermes/models/hermes_model.dart';
+import 'package:conduit_core/features/auth/providers/unified_auth_providers.dart';
+import 'package:conduit_core/features/direct_connections/models/direct_connection_profile.dart';
+import 'package:conduit_core/features/direct_connections/models/direct_remote_model.dart';
+import 'package:conduit_core/features/direct_connections/services/direct_model_registry.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -159,6 +163,56 @@ void main() {
       expect(payload.filePaths, ['/tmp/movie.mp4']);
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(await thumbnail.exists(), isTrue);
+    });
+  });
+
+  group('share composer readiness', () {
+    Model directModel() {
+      final profile = DirectConnectionProfile(
+        id: 'profile-one',
+        name: 'Example',
+        adapterKey: kOllamaAdapterKey,
+        baseUrl: 'http://localhost:11434',
+      );
+      return DirectModelRegistry().replaceProfileModels(profile, [
+        DirectRemoteModel(id: 'llava:latest', isMultimodal: true),
+      ]).single;
+    }
+
+    test('requires a selected model', () {
+      expect(
+        isShareComposerReady(AuthNavigationState.authenticated, null),
+        isFalse,
+      );
+    });
+
+    test('accepts any model with an Open WebUI session', () {
+      expect(
+        isShareComposerReady(
+          AuthNavigationState.authenticated,
+          const Model(id: 'server-model', name: 'Server model'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('accepts accountless direct and Hermes models without sign-in', () {
+      for (final model in [directModel(), hermesSyntheticModel()]) {
+        expect(
+          isShareComposerReady(AuthNavigationState.needsLogin, model),
+          isTrue,
+        );
+      }
+    });
+
+    test('rejects server models without an Open WebUI session', () {
+      expect(
+        isShareComposerReady(
+          AuthNavigationState.needsLogin,
+          const Model(id: 'server-model', name: 'Server model'),
+        ),
+        isFalse,
+      );
     });
   });
 

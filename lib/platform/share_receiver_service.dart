@@ -16,6 +16,7 @@ import '../features/chat/services/file_attachment_service.dart';
 
 import 'package:conduit_core/features/direct_connections/direct_connections.dart';
 import 'package:conduit_core/features/hermes/models/hermes_model.dart';
+import 'package:conduit_core/models/model.dart';
 import 'package:conduit_core/providers/app_providers.dart';
 
 import '../core/services/media_upload_controller.dart';
@@ -542,6 +543,17 @@ class SharedAttachmentImportStatusNotifier
   }
 }
 
+/// Whether a shared payload can be handed to the chat composer.
+///
+/// Direct and Hermes models are accountless: they never depend on an Open
+/// WebUI session, so the share must not wait for one that will never come.
+@visibleForTesting
+bool isShareComposerReady(AuthNavigationState navState, Model? model) {
+  if (model == null) return false;
+  if (isHermesModel(model) || hasReservedDirectIdentity(model)) return true;
+  return navState == AuthNavigationState.authenticated;
+}
+
 /// Initializes listening to OS share intents and handles them
 final shareReceiverInitializerProvider = Provider<void>((ref) {
   // Only mobile platforms handle OS share intents
@@ -816,9 +828,10 @@ final shareReceiverInitializerProvider = Provider<void>((ref) {
   Future<void> prepareShareImportUi(SharedAttachmentImportStatus status) async {
     if (!status.hasPlaceholders) return;
 
-    final navState = ref.read(authNavigationStateProvider);
-    final model = ref.read(selectedModelProvider);
-    if (navState != AuthNavigationState.authenticated || model == null) {
+    if (!isShareComposerReady(
+      ref.read(authNavigationStateProvider),
+      ref.read(selectedModelProvider),
+    )) {
       return;
     }
 
@@ -851,7 +864,7 @@ final shareReceiverInitializerProvider = Provider<void>((ref) {
     return status;
   }
 
-  // Listen for app readiness: authenticated, model available, and chat visible.
+  // Listen for app readiness: composer ready (see isShareComposerReady) and chat visible.
   maybeProcessPending = () async {
     if (isProcessingPending) return;
 
@@ -863,7 +876,7 @@ final shareReceiverInitializerProvider = Provider<void>((ref) {
     if (!isAcknowledgementRetry) {
       final navState = ref.read(authNavigationStateProvider);
       final model = ref.read(selectedModelProvider);
-      if (navState != AuthNavigationState.authenticated || model == null) {
+      if (!isShareComposerReady(navState, model)) {
         return;
       }
     }
