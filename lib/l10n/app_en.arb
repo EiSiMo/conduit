@@ -1776,6 +1776,46 @@
   "@ttsServerUnavailableWarning": {
     "description": "Warning shown when server text-to-speech is unavailable."
   },
+  "sttEngineDirect": "Direct",
+  "@sttEngineDirect": {
+    "description": "Chip label for speech recognition through a direct connection."
+  },
+  "sttEngineDirectDescription": "Send recordings to a transcription model on your OpenRouter connection.",
+  "@sttEngineDirectDescription": {
+    "description": "Description shown when direct speech-to-text is active."
+  },
+  "ttsEngineDirect": "Direct",
+  "@ttsEngineDirect": {
+    "description": "Chip label for text-to-speech through a direct connection."
+  },
+  "ttsEngineDirectDescription": "Create speech with a model on your OpenRouter connection.",
+  "@ttsEngineDirectDescription": {
+    "description": "Description shown when direct text-to-speech is active."
+  },
+  "directAudioModel": "Model",
+  "@directAudioModel": {
+    "description": "Settings tile title for the direct speech or transcription model."
+  },
+  "directAudioModelNotSelected": "Not selected",
+  "@directAudioModelNotSelected": {
+    "description": "Subtitle when no direct audio model is selected."
+  },
+  "directAudioSelectModel": "Select model",
+  "@directAudioSelectModel": {
+    "description": "Title of the sheet for choosing a direct audio model."
+  },
+  "directAudioUnavailableWarning": "Add an OpenRouter connection to use this option.",
+  "@directAudioUnavailableWarning": {
+    "description": "Warning shown when direct audio is selected but no OpenRouter connection exists."
+  },
+  "directAudioSelectModelWarning": "Choose a model to use this option.",
+  "@directAudioSelectModelWarning": {
+    "description": "Warning shown when direct audio is selected but no model is chosen."
+  },
+  "directAudioNoModels": "This connection offers no matching models.",
+  "@directAudioNoModels": {
+    "description": "Shown when a direct connection lists no speech or transcription models."
+  },
   "ttsSettings": "Text to speech",
   "@ttsSettings": {
     "description": "Section header for TTS-related customization options."

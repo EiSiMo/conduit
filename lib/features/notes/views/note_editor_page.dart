@@ -799,7 +799,9 @@ class _NoteEditorPageState extends ConsumerState<NoteEditorPage> {
   }
 
   Future<void> _startDictation() async {
-    _voiceService ??= VoiceInputService(api: ref.read(apiServiceProvider));
+    _voiceService ??= VoiceInputService(
+      transcriber: ref.read(apiServiceProvider),
+    );
 
     try {
       final ok = await _voiceService!.initialize();

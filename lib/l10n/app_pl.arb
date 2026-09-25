@@ -1773,6 +1773,16 @@
     "description": "Warning shown when on-device text-to-speech is unavailable."
   },
   "ttsServerUnavailableWarning": "Aby korzystać z tej opcji, połącz się z serwerem z włączoną zamianą tekstu na mowę.",
+  "sttEngineDirect": "Bezpośrednio",
+  "sttEngineDirectDescription": "Wysyła nagrania do modelu transkrypcji z twojego połączenia OpenRouter.",
+  "ttsEngineDirect": "Bezpośrednio",
+  "ttsEngineDirectDescription": "Tworzy mowę modelem z twojego połączenia OpenRouter.",
+  "directAudioModel": "Model",
+  "directAudioModelNotSelected": "Nie wybrano",
+  "directAudioSelectModel": "Wybierz model",
+  "directAudioUnavailableWarning": "Dodaj połączenie OpenRouter, aby użyć tej opcji.",
+  "directAudioSelectModelWarning": "Wybierz model, aby użyć tej opcji.",
+  "directAudioNoModels": "To połączenie nie oferuje pasujących modeli.",
   "@ttsServerUnavailableWarning": {
     "description": "Warning shown when server text-to-speech is unavailable."
   },

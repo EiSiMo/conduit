@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:conduit_core/models/backend_config.dart';
 
-import 'package:conduit_core/services/api_service.dart';
+import 'package:conduit_core/services/remote_speech.dart';
 
 import '../../../core/services/background_streaming_handler.dart';
 
@@ -221,7 +221,7 @@ class TtsManager {
   bool _isTransitioningChunks = false;
 
   // API service for server TTS (must be set before using server TTS)
-  ApiService? _apiService;
+  SpeechSynthesizer? _synthesizer;
 
   // Configuration
   TtsConfig _config = const TtsConfig();
@@ -278,8 +278,8 @@ class TtsManager {
   /// Whether device TTS is available.
   bool get deviceAvailable => _deviceEngineAvailable;
 
-  /// Whether server TTS is available.
-  bool get serverAvailable => _apiService != null;
+  /// Whether remote TTS (Open WebUI or a direct connection) is available.
+  bool get serverAvailable => _synthesizer != null;
 
   /// Whether any TTS is available.
   bool get isAvailable => _deviceEngineAvailable || serverAvailable;
@@ -290,9 +290,10 @@ class TtsManager {
   /// Current configuration.
   TtsConfig get config => _config;
 
-  /// Sets the API service for server TTS.
-  void setApiService(ApiService? api) {
-    _apiService = api;
+  /// Sets the backend used for remote TTS: the Open WebUI API or a direct
+  /// connection, depending on the selected engine.
+  void setSynthesizer(SpeechSynthesizer? synthesizer) {
+    _synthesizer = synthesizer;
   }
 
   /// Swaps the device engine binding so tests can drive device playback
@@ -728,7 +729,8 @@ class TtsManager {
   Future<({Uint8List bytes, String mimeType})> synthesizeChunk(
     String text,
   ) async {
-    if (_apiService == null) {
+    final synthesizer = _synthesizer;
+    if (synthesizer == null) {
       throw StateError('Server TTS is not available');
     }
     if (text.trim().isEmpty) {
@@ -736,7 +738,7 @@ class TtsManager {
     }
 
     final voice = await _resolveServerVoice();
-    final result = await _apiService!.generateSpeech(text: text, voice: voice);
+    final result = await synthesizer.generateSpeech(text: text, voice: voice);
     return (bytes: result.bytes, mimeType: result.mimeType);
   }
 
@@ -1017,7 +1019,7 @@ class TtsManager {
   // ===========================================================================
 
   Future<void> _startServerPlayback(TtsPlaybackSession session) async {
-    if (_apiService == null) {
+    if (_synthesizer == null) {
       throw StateError('Server TTS is not available');
     }
 
@@ -1136,7 +1138,11 @@ class TtsManager {
     String? voice, {
     double? speed,
   }) async {
-    final result = await _apiService!.generateSpeech(
+    final synthesizer = _synthesizer;
+    if (synthesizer == null) {
+      throw StateError('Server TTS is not available');
+    }
+    final result = await synthesizer.generateSpeech(
       text: text,
       voice: voice,
       speed: speed,
@@ -1431,13 +1437,13 @@ class TtsManager {
   // ===========================================================================
 
   bool _shouldUseServer() {
-    if (_config.preferServer && _apiService != null) {
+    if (_config.preferServer && _synthesizer != null) {
       return true;
     }
     if (_deviceEngineAvailable) {
       return false;
     }
-    return _apiService != null;
+    return _synthesizer != null;
   }
 
   void _resetPlaybackState() {

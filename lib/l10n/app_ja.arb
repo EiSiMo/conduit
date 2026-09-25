@@ -1510,6 +1510,16 @@
     "description": "Warning shown when on-device text-to-speech is unavailable."
   },
   "ttsServerUnavailableWarning": "このオプションを使用するには、テキスト読み上げが有効なサーバーに接続してください。",
+  "sttEngineDirect": "ダイレクト",
+  "sttEngineDirectDescription": "録音を OpenRouter 接続の文字起こしモデルに送信します。",
+  "ttsEngineDirect": "ダイレクト",
+  "ttsEngineDirectDescription": "OpenRouter 接続のモデルで音声を生成します。",
+  "directAudioModel": "モデル",
+  "directAudioModelNotSelected": "未選択",
+  "directAudioSelectModel": "モデルを選択",
+  "directAudioUnavailableWarning": "このオプションを使うには OpenRouter 接続を追加してください。",
+  "directAudioSelectModelWarning": "このオプションを使うにはモデルを選択してください。",
+  "directAudioNoModels": "この接続には該当するモデルがありません。",
   "@ttsServerUnavailableWarning": {
     "description": "Warning shown when server text-to-speech is unavailable."
   },

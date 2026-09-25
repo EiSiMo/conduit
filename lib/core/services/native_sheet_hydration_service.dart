@@ -7,6 +7,9 @@ import 'package:uuid/uuid.dart';
 
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
+import 'package:conduit_core/features/direct_connections/services/direct_audio_client.dart';
+
+import '../../features/chat/providers/remote_speech_providers.dart';
 import '../../features/chat/providers/text_to_speech_provider.dart';
 import '../../features/chat/models/model_selector_layout.dart';
 import '../../features/chat/providers/reasoning_effort_provider.dart';
@@ -893,24 +896,77 @@ class NativeSheetHydrationService {
     }
   }
 
+  Future<List<NativeDirectAudioModel>> _loadNativeDirectAudioModels(
+    DirectAudioModelKind kind,
+  ) async {
+    final models = <NativeDirectAudioModel>[];
+    for (final profile in _ref.read(directAudioProfilesProvider)) {
+      try {
+        final profileModels = await _ref.read(
+          directAudioModelsProvider((profileId: profile.id, kind: kind)).future,
+        );
+        models.addAll(
+          profileModels.map(
+            (model) => (
+              profileId: profile.id,
+              profileName: profile.name,
+              model: model,
+            ),
+          ),
+        );
+      } catch (error, stackTrace) {
+        DebugLogger.warning(
+          'native-direct-audio-models-load-failed',
+          scope: 'native-sheet',
+          data: {'error': error, 'stackTrace': stackTrace},
+        );
+      }
+    }
+    return models;
+  }
+
   Future<void> _hydrateNativeVoiceDetail(AppLocalizations l10n) async {
     final appSettings = _ref.read(appSettingsProvider);
+    final sttDirectModels = appSettings.sttPreference == SttPreference.direct
+        ? await _loadNativeDirectAudioModels(DirectAudioModelKind.transcription)
+        : const <NativeDirectAudioModel>[];
+    var ttsDirectModels = const <NativeDirectAudioModel>[];
     var ttsVoices = const <Map<String, dynamic>>[];
-    try {
-      final ttsService = _ref.read(textToSpeechServiceProvider);
-      await ttsService.updateSettings(engine: appSettings.ttsEngine);
-      ttsVoices = await ttsService.getAvailableVoices();
-    } catch (error, stackTrace) {
-      DebugLogger.warning(
-        'native-tts-voices-load-failed',
-        scope: 'native-sheet',
-        data: {'error': error, 'stackTrace': stackTrace},
+    if (appSettings.ttsEngine == TtsEngine.direct) {
+      ttsDirectModels = await _loadNativeDirectAudioModels(
+        DirectAudioModelKind.speech,
       );
+      final selected = ttsDirectModels
+          .where(
+            (entry) =>
+                entry.profileId == appSettings.ttsDirectProfileId &&
+                entry.model.id == appSettings.ttsDirectModelId,
+          )
+          .firstOrNull;
+      ttsVoices = [
+        for (final voice in selected?.model.voices ?? const <String>[])
+          {'id': voice, 'name': voice},
+      ];
+    } else {
+      try {
+        final ttsService = _ref.read(textToSpeechServiceProvider);
+        await ttsService.updateSettings(engine: appSettings.ttsEngine);
+        ttsVoices = await ttsService.getAvailableVoices();
+      } catch (error, stackTrace) {
+        DebugLogger.warning(
+          'native-tts-voices-load-failed',
+          scope: 'native-sheet',
+          data: {'error': error, 'stackTrace': stackTrace},
+        );
+      }
     }
     final nativeAudio = buildNativeAudioSheetParts(
       l10n,
       appSettings,
       ttsVoices: ttsVoices,
+      directAudioAvailable: _ref.read(directAudioProfilesProvider).isNotEmpty,
+      sttDirectModels: sttDirectModels,
+      ttsDirectModels: ttsDirectModels,
     );
     await _applyNativeDetail(
       NativeSheetDetailConfig(

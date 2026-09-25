@@ -63,9 +63,11 @@ import 'package:conduit_core/services/settings_service.dart';
 
 import 'package:conduit_core/sync/request_completion_runner_provider.dart';
 
+import 'core/utils/native_sheet_utils.dart' show decodeNativeDirectAudioModelId;
 import 'core/utils/tts_voice_utils.dart';
 import 'core/utils/current_localizations.dart';
 import 'features/chat/services/request_completion_runner.dart';
+import 'features/chat/providers/remote_speech_providers.dart';
 import 'features/chat/providers/text_to_speech_provider.dart';
 import 'features/chat/providers/chat_providers.dart'
     show chatWakelockCoordinatorProvider, restoreDefaultModel;
@@ -99,6 +101,7 @@ import 'platform/frame_profiler.dart';
 import 'features/direct_connections/providers/apple_pcc_providers.dart';
 
 import 'package:conduit_core/features/direct_connections/providers/direct_connection_providers.dart';
+import 'package:conduit_core/features/direct_connections/services/direct_audio_client.dart';
 
 import 'shared/services/app_package_info.dart';
 
@@ -717,16 +720,30 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
                 .setSystemPrompt(value);
           }
         case 'stt-engine':
-          if (value == SttPreference.serverOnly.name) {
+          final preference = SttPreference.values
+              .where((preference) => preference.name == value)
+              .firstOrNull;
+          if (preference != null) {
             await ref
                 .read(appSettingsProvider.notifier)
-                .setSttPreference(SttPreference.serverOnly);
+                .setSttPreference(preference);
             await _refreshNativeVoiceDetail();
-          } else if (value == SttPreference.deviceOnly.name) {
+          }
+        case 'stt-direct-model':
+          final selection = decodeNativeDirectAudioModelId(value);
+          if (selection != null) {
             await ref
                 .read(appSettingsProvider.notifier)
-                .setSttPreference(SttPreference.deviceOnly);
+                .setSttDirectModel(selection.profileId, selection.modelId);
             await _refreshNativeVoiceDetail();
+          }
+        case 'tts-direct-model':
+          final selection = decodeNativeDirectAudioModelId(value);
+          if (selection != null) {
+            await _handleNativeTtsDirectModelSelection(
+              selection.profileId,
+              selection.modelId,
+            );
           }
         case 'stt-language-code':
           if (value is String) {
@@ -747,12 +764,13 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             }
           }
         case 'tts-engine':
-          final notifier = ref.read(appSettingsProvider.notifier);
-          if (value == TtsEngine.server.name) {
-            await notifier.setTtsEngineSelection(TtsEngine.server);
-            await _refreshNativeVoiceDetail();
-          } else if (value == TtsEngine.device.name) {
-            await notifier.setTtsEngineSelection(TtsEngine.device);
+          final engine = TtsEngine.values
+              .where((engine) => engine.name == value)
+              .firstOrNull;
+          if (engine != null) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setTtsEngineSelection(engine);
             await _refreshNativeVoiceDetail();
           }
         case 'theme-light':
@@ -961,12 +979,56 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
     );
   }
 
+  Future<void> _handleNativeTtsDirectModelSelection(
+    String profileId,
+    String modelId,
+  ) async {
+    final settings = ref.read(appSettingsProvider);
+    var voices = const <String>[];
+    try {
+      final models = await ref.read(
+        directAudioModelsProvider((
+          profileId: profileId,
+          kind: DirectAudioModelKind.speech,
+        )).future,
+      );
+      voices =
+          models.where((model) => model.id == modelId).firstOrNull?.voices ??
+          const <String>[];
+    } catch (error, stackTrace) {
+      DebugLogger.warning(
+        'native-direct-tts-model-lookup-failed',
+        scope: 'native/sheet',
+        data: {'error': error, 'stackTrace': stackTrace},
+      );
+    }
+    // Keep the voice when the new model offers it too; most providers
+    // require one, so otherwise start from the model's first voice.
+    final current = settings.ttsDirectVoice;
+    await ref
+        .read(appSettingsProvider.notifier)
+        .setTtsDirectModel(
+          profileId,
+          modelId,
+          voice: voices.contains(current) ? current : voices.firstOrNull,
+        );
+    await _refreshNativeVoiceDetail();
+  }
+
   Future<void> _handleNativeTtsVoiceSelection(
     String voiceKey, {
     String? fallbackDisplayName,
   }) async {
     final settings = ref.read(appSettingsProvider);
     final notifier = ref.read(appSettingsProvider.notifier);
+
+    if (settings.ttsEngine == TtsEngine.direct) {
+      await notifier.setTtsDirectVoice(
+        voiceKey == ttsSystemDefaultVoiceId ? null : voiceKey,
+      );
+      await _refreshNativeVoiceDetail();
+      return;
+    }
 
     if (voiceKey == ttsSystemDefaultVoiceId) {
       if (settings.ttsEngine == TtsEngine.server) {

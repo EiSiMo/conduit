@@ -108,7 +108,7 @@ TtsVoiceOptionData? findTtsVoiceOption(
 
 Set<String> ttsVoiceAliasesFor(TtsEngine engine, Map<String, dynamic> voice) {
   final keys = switch (engine) {
-    TtsEngine.server => const <String>[
+    TtsEngine.server || TtsEngine.direct => const <String>[
       'id',
       'name',
       'identifier',
@@ -136,7 +136,7 @@ String ttsVoiceIdFor(TtsEngine engine, Map<String, dynamic> voice) {
   final locale = _cleanVoiceValue(voice['locale'] ?? voice['language']);
 
   return switch (engine) {
-    TtsEngine.server =>
+    TtsEngine.server || TtsEngine.direct =>
       id ?? name ?? identifier ?? voiceIdentifier ?? locale ?? '',
     TtsEngine.device =>
       identifier ?? id ?? voiceIdentifier ?? name ?? locale ?? '',
@@ -220,6 +220,7 @@ String formatTtsVoiceDisplayName(String voiceName) {
 String? _selectedStoredVoiceId(AppSettings settings) {
   return switch (settings.ttsEngine) {
     TtsEngine.server => _cleanVoiceValue(settings.ttsServerVoiceId),
+    TtsEngine.direct => _cleanVoiceValue(settings.ttsDirectVoice),
     TtsEngine.device => _cleanVoiceValue(settings.ttsVoice),
   };
 }
@@ -227,6 +228,8 @@ String? _selectedStoredVoiceId(AppSettings settings) {
 String? _selectedStoredVoiceName(AppSettings settings) {
   return switch (settings.ttsEngine) {
     TtsEngine.server => _cleanVoiceValue(settings.ttsServerVoiceName),
+    // Direct voices are plain ids without a separate display name.
+    TtsEngine.direct => _cleanVoiceValue(settings.ttsDirectVoice),
     TtsEngine.device => _cleanVoiceValue(settings.ttsVoiceName),
   };
 }

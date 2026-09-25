@@ -13,12 +13,13 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:vad/vad.dart' show VadHandler;
 
 import 'package:conduit_core/providers/app_providers.dart';
-import 'package:conduit_core/services/api_service.dart';
+import 'package:conduit_core/services/remote_speech.dart';
 
 import 'package:conduit_core/services/settings_service.dart';
 
 import 'package:conduit_core/utils/debug_logger.dart';
 
+import '../providers/remote_speech_providers.dart';
 import 'native_stt_service.dart';
 import 'server_vad_recorder.dart';
 
@@ -62,7 +63,7 @@ class VoiceInputService {
   VadHandler? _vadHandler;
   ServerVadRecorderSession? _serverVadRecorderSession;
   final NativeSttService _nativeStt;
-  final ApiService? _api;
+  final SpeechTranscriber? _transcriber;
   final Ref? _ref;
   final AudioCapturePort Function() _serverVadRecorderFactory;
   bool _isInitialized = false;
@@ -121,25 +122,31 @@ class VoiceInputService {
   @protected
   String get deviceLocaleTag =>
       WidgetsBinding.instance.platformDispatcher.locale.toLanguageTag();
-  bool get hasServerStt => _api != null;
+
+  /// Whether a remote transcriber (Open WebUI or a direct connection,
+  /// depending on the preference) is configured.
+  bool get hasServerStt => _transcriber != null;
 
   /// True while a finished server recording is being transcribed, whether the
   /// stop was manual or triggered by voice activity detection (issue #707).
   final ValueNotifier<bool> transcribing = ValueNotifier<bool>(false);
   final Set<Future<void>> _activeTranscriptions = <Future<void>>{};
   SttPreference get preference => _preference;
-  bool get prefersServerOnly => _preference == SttPreference.serverOnly;
+
+  /// True for every remote preference: both Open WebUI and direct
+  /// transcription record with VAD and never fall back to on-device STT.
+  bool get prefersServerOnly => _preference != SttPreference.deviceOnly;
   bool get prefersDeviceOnly => _preference == SttPreference.deviceOnly;
   bool get _isIosSimulator =>
       Platform.isIOS &&
       Platform.environment.containsKey('SIMULATOR_DEVICE_NAME');
 
   VoiceInputService({
-    ApiService? api,
+    SpeechTranscriber? transcriber,
     Ref? ref,
     NativeSttService? nativeStt,
     @visibleForTesting AudioCapturePort Function()? serverVadRecorderFactory,
-  }) : _api = api,
+  }) : _transcriber = transcriber,
        _ref = ref,
        _nativeStt = nativeStt ?? NativeSttService(),
        _serverVadRecorderFactory =
@@ -162,8 +169,7 @@ class VoiceInputService {
       return true;
     }
 
-    final shouldPrepareLocalStt =
-        forceLocalStt || _preference != SttPreference.serverOnly;
+    final shouldPrepareLocalStt = forceLocalStt || !prefersServerOnly;
     if (shouldPrepareLocalStt && !_didAttemptLocalInitialization) {
       await _loadLocales(deviceTag);
       await _initializeNativeLocalStt();
@@ -229,7 +235,7 @@ class VoiceInputService {
   bool get willUseNativeLocalStt =>
       supportsNativeResponseWaitCapture &&
       _nativeLocalSttAvailable &&
-      _preference != SttPreference.serverOnly;
+      !prefersServerOnly;
   bool get isHoldingServerRecorderForResponse =>
       _serverVadRecorderSession?.isHoldingForResponse == true;
   bool get lastCompletedTranscriptSendable => _completedTranscriptIsSendable;
@@ -633,11 +639,10 @@ class VoiceInputService {
 
     final bool canUseLocal = _localSttAvailable;
     final bool serverAvailable = hasServerStt;
-    final bool shouldUseLocal =
-        canUseLocal && _preference != SttPreference.serverOnly;
+    final bool shouldUseLocal = canUseLocal && !prefersServerOnly;
     final bool shouldUseServer =
         serverAvailable &&
-        (_preference == SttPreference.serverOnly ||
+        (prefersServerOnly ||
             (!shouldUseLocal && _preference != SttPreference.deviceOnly));
 
     if (_isListening) {
@@ -1162,15 +1167,15 @@ class VoiceInputService {
   }
 
   Future<void> _processVadSamples(List<double> samples) async {
-    final api = _api;
-    if (api == null) return;
+    final transcriber = _transcriber;
+    if (transcriber == null) return;
 
     try {
       final wavBytes = _samplesToWav(samples);
       final fileName =
           'conduit_voice_${DateTime.now().millisecondsSinceEpoch}.wav';
 
-      final response = await api.transcribeSpeech(
+      final response = await transcriber.transcribeSpeech(
         audioBytes: wavBytes,
         fileName: fileName,
         mimeType: 'audio/wav',
@@ -1451,8 +1456,10 @@ class VoiceInputService {
 }
 
 final voiceInputServiceProvider = Provider<VoiceInputService>((ref) {
-  final api = ref.watch(apiServiceProvider);
-  final service = VoiceInputService(api: api, ref: ref);
+  final service = VoiceInputService(
+    transcriber: ref.watch(activeSpeechTranscriberProvider),
+    ref: ref,
+  );
   final currentSettings = ref.read(appSettingsProvider);
   service.updatePreference(currentSettings.sttPreference);
   service.setLocale(currentSettings.voiceLocaleId);
@@ -1485,7 +1492,7 @@ Future<bool> voiceInputAvailable(Ref ref) async {
 
   // If the user prefers server-only STT, only expose voice input when a
   // server STT backend is configured.
-  if (service.preference == SttPreference.serverOnly) {
+  if (service.prefersServerOnly) {
     return service.hasServerStt;
   }
 
@@ -1525,6 +1532,10 @@ final localVoiceRecognitionAvailableProvider = FutureProvider<bool>((
 });
 
 final serverVoiceRecognitionAvailableProvider = Provider<bool>((ref) {
-  final service = ref.watch(voiceInputServiceProvider);
-  return service.hasServerStt;
+  return ref.watch(apiServiceProvider) != null;
+});
+
+/// Whether a direct connection that can transcribe speech is configured.
+final directVoiceRecognitionAvailableProvider = Provider<bool>((ref) {
+  return ref.watch(directAudioProfilesProvider).isNotEmpty;
 });

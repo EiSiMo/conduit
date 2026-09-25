@@ -1181,6 +1181,8 @@ class AppCustomizationPage extends ConsumerWidget {
           warnings.add(l10n.ttsServerUnavailableWarning);
         }
         break;
+      case TtsEngine.direct:
+        break;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1338,6 +1340,8 @@ class AppCustomizationPage extends ConsumerWidget {
         return l10n.sttEngineDeviceDescription;
       case SttPreference.serverOnly:
         return l10n.sttEngineServerDescription;
+      case SttPreference.direct:
+        return l10n.sttEngineDirectDescription;
     }
   }
 
@@ -1350,6 +1354,8 @@ class AppCustomizationPage extends ConsumerWidget {
         return l10n.ttsEngineDeviceDescription;
       case TtsEngine.server:
         return l10n.ttsEngineServerDescription;
+      case TtsEngine.direct:
+        return l10n.ttsEngineDirectDescription;
     }
   }
 
@@ -1368,6 +1374,8 @@ class AppCustomizationPage extends ConsumerWidget {
         return deviceName;
       case TtsEngine.server:
         return serverName;
+      case TtsEngine.direct:
+        return settings.ttsDirectVoice ?? l10n.ttsSystemDefault;
     }
   }
 

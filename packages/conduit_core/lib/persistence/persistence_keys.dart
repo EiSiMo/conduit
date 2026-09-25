@@ -52,9 +52,15 @@ final class PreferenceKeys {
   static const String ttsSpeechRate = 'tts_speech_rate';
   static const String ttsPitch = 'tts_pitch';
   static const String ttsVolume = 'tts_volume';
-  static const String ttsEngine = 'tts_engine'; // 'device' | 'server'
+  static const String ttsEngine =
+      'tts_engine'; // 'device' | 'server' | 'direct'
   static const String ttsServerVoiceId = 'tts_server_voice_id';
   static const String ttsServerVoiceName = 'tts_server_voice_name';
+  static const String ttsDirectProfileId = 'tts_direct_profile_id';
+  static const String ttsDirectModelId = 'tts_direct_model_id';
+  static const String ttsDirectVoice = 'tts_direct_voice';
+  static const String sttDirectProfileId = 'stt_direct_profile_id';
+  static const String sttDirectModelId = 'stt_direct_model_id';
   static const String voiceSilenceDuration = 'voice_silence_duration';
   static const String androidAssistantTrigger = 'android_assistant_trigger';
   static const String temporaryChatByDefault = 'temporary_chat_by_default';
