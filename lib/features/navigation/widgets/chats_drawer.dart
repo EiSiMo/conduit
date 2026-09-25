@@ -751,7 +751,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
           final hasMoreRegularChats =
               conversationsNotifier.hasMoreRegularChats() ||
               _isLoadingMoreConversations;
-          final foldersEnabled = ref.watch(foldersFeatureEnabledProvider);
+          final foldersEnabled = _watchFoldersEnabled();
           final foldersState = ref.watch(foldersProvider);
           final folders = foldersState.maybeWhen(
             data: (folders) => folders,
@@ -959,7 +959,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
         final pinned = list.where((c) => c.pinned == true).toList();
 
         // For search results, apply the same folder safety logic
-        final foldersEnabled = ref.watch(foldersFeatureEnabledProvider);
+        final foldersEnabled = _watchFoldersEnabled();
         final foldersState = ref.watch(foldersProvider);
         final folders = foldersState.maybeWhen(
           data: (folders) => folders,
@@ -1417,6 +1417,12 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
       messages: const [],
     );
   }
+
+  /// Folders live on the Open WebUI server, so direct-only sessions (no
+  /// [ApiService]) must not offer them.
+  bool _watchFoldersEnabled() =>
+      ref.watch(foldersFeatureEnabledProvider) &&
+      ref.watch(openWebUiAccountAvailableProvider);
 
   Future<void> _showDrawerError(String message) async {
     if (!mounted) return;
